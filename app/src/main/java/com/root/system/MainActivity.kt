@@ -100,13 +100,6 @@ class MainActivity : AppCompatActivity() {
             }
         }).start()
 
-        if (CheckRootStatus.lastCheckResult && krScriptConfig.allowHomePage) {
-            val home = FragmentHome()
-            val fragmentManager = supportFragmentManager
-            val transaction = fragmentManager.beginTransaction()
-            transaction.replace(R.id.main_tabhost_cpu, home)
-            transaction.commitAllowingStateLoss()
-        }
 
         if (!(checkPermission(Manifest.permission.READ_EXTERNAL_STORAGE) && checkPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE))) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE), 111);
