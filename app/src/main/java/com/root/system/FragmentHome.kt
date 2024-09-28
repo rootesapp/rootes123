@@ -14,9 +14,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.github.topjohnwu.libsu.Su
 import com.google.android.material.floatingactionbutton.FloatingActionButton
-import com.stericson.RootTools.RootTools
-import com.topjohnwu.superuser.Shell
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -38,7 +37,7 @@ class FragmentHome : AppCompatActivity() {
         // 获取分区列表
         partitions = getPartitionsFromDev()
 
-        // 如果获取失败，显示对话框
+        // 如果获取失败，显示对话框自定义root命令
         if (partitions.isEmpty()) {
             showRootCommandDialog()
         } else {
@@ -70,27 +69,25 @@ class FragmentHome : AppCompatActivity() {
 
         // 搜索框文字变更监听
         searchBox.addTextChangedListener(object : TextWatcher {
-            override fun afterTextChanged(s: Editable?) {
-                // 可以实时过滤或在按回车时过滤
-            }
-
+            override fun afterTextChanged(s: Editable?) {}
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
     }
 
-    // 使用 root 权限从 /dev/block/by-name 获取分区
+    // 使用 libsu 获取分区列表
     private fun getPartitionsFromDev(): MutableList<String> {
         val partitions = mutableListOf<String>()
         val command = "ls /dev/block/by-name"
 
         try {
-            val output = Shell.su(command).exec().out
-            partitions.addAll(output)
+            // 使用 libsu 执行命令
+            val output = Su.run(command)
+            partitions.addAll(output.lines().filter { it.isNotEmpty() })
 
-            // 检查返回状态
+            // 如果没有获取到分区，清空列表
             if (partitions.isEmpty()) {
-                throw RuntimeException("获取分区失败")
+                Toast.makeText(this, "无法获取分区", Toast.LENGTH_SHORT).show()
             }
         } catch (e: Exception) {
             partitions.clear() // 捕获异常，清空 partitions
@@ -156,12 +153,15 @@ class FragmentHome : AppCompatActivity() {
     // 执行root命令的方法
     private fun executeRootCommand(command: String, onSuccess: () -> Unit) {
         try {
-            Shell.su(command).exec().out // 执行命令并获取输出
-
-            // 直接调用 onSuccess
-            onSuccess()
+            // 使用 libsu 执行命令
+            val process = Su.run(command)
+            if (process.isNotEmpty()) {
+                onSuccess()
+            } else {
+                showRootCommandDialog()
+            }
         } catch (e: Exception) {
-            Toast.makeText(this, "执行命令失败: ${e.message}", Toast.LENGTH_SHORT).show()
+            showRootCommandDialog()
         }
     }
 
@@ -174,27 +174,21 @@ class FragmentHome : AppCompatActivity() {
 
         AlertDialog.Builder(this)
             .setTitle("Root授权命令无效")
-            .setMessage("当前无法使用默认的'su'命令，请输入正确的Root授权命令：")
+            .setMessage("当前无法使用默认的命令，请输入正确的Root授权命令：")
             .setView(input)
             .setPositiveButton("确定") { _, _ ->
-                // 这里可以使用输入的命令进行其他操作
-                // 目前直接返回
-                showPartitions() // 重新获取分区
+                // 不再需要自定义命令，直接获取分区列表
+                partitions = getPartitionsFromDev()
+                if (partitions.isNotEmpty()) {
+                    setupUI()
+                } else {
+                    Toast.makeText(this, "获取分区失败，请检查Root授权命令", Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton("取消", null)
             .setNeutralButton("退出软件") { _, _ ->
                 finish() // 退出应用程序
             }
             .show()
-    }
-
-    // 重新获取分区
-    private fun showPartitions() {
-        partitions = getPartitionsFromDev()
-        if (partitions.isNotEmpty()) {
-            setupUI()
-        } else {
-            Toast.makeText(this, "获取分区失败，请检查Root授权命令", Toast.LENGTH_SHORT).show()
-        }
     }
 }
