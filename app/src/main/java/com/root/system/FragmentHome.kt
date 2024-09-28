@@ -16,6 +16,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.stericson.RootTools.RootTools
+import com.topjohnwu.superuser.Shell
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -24,7 +25,6 @@ class FragmentHome : AppCompatActivity() {
     private lateinit var partitionList: RecyclerView
     private lateinit var searchBox: EditText
     private lateinit var partitions: MutableList<String>
-    private var rootCommand = "su" // 默认的 root 命令
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,10 +35,10 @@ class FragmentHome : AppCompatActivity() {
         searchBox = findViewById(R.id.search_box)
         val flashAllBtn: FloatingActionButton = findViewById(R.id.flash_all_button)
 
-        // 首先尝试使用默认 root 命令获取分区列表
+        // 获取分区列表
         partitions = getPartitionsFromDev()
 
-        // 如果获取失败，显示对话框自定义root命令
+        // 如果获取失败，显示对话框
         if (partitions.isEmpty()) {
             showRootCommandDialog()
         } else {
@@ -85,12 +85,8 @@ class FragmentHome : AppCompatActivity() {
         val command = "ls /dev/block/by-name"
 
         try {
-            val shell = RootTools.getShell(true)
-            val output = shell.run(command)
-
-            output.forEach { line ->
-                partitions.add(line)
-            }
+            val output = Shell.su(command).exec().out
+            partitions.addAll(output)
 
             // 检查返回状态
             if (partitions.isEmpty()) {
@@ -128,7 +124,7 @@ class FragmentHome : AppCompatActivity() {
     // 提取分区的功能 (使用dd命令)
     private fun extractPartition(partition: String) {
         val outputPath = "/sdcard/${partition}_backup.img"
-        val command = "$rootCommand -c 'dd if=/dev/block/by-name/$partition of=$outputPath'"
+        val command = "dd if=/dev/block/by-name/$partition of=$outputPath"
 
         executeRootCommand(command) {
             Toast.makeText(this, "提取完成: $outputPath", Toast.LENGTH_SHORT).show()
@@ -138,7 +134,7 @@ class FragmentHome : AppCompatActivity() {
     // 刷入分区的功能 (使用dd命令)
     private fun flashPartition(partition: String) {
         val inputPath = "/sdcard/${partition}_image.img"
-        val command = "$rootCommand -c 'dd if=$inputPath of=/dev/block/by-name/$partition'"
+        val command = "dd if=$inputPath of=/dev/block/by-name/$partition"
 
         executeRootCommand(command) {
             Toast.makeText(this, "$partition 刷入完成", Toast.LENGTH_SHORT).show()
@@ -160,17 +156,12 @@ class FragmentHome : AppCompatActivity() {
     // 执行root命令的方法
     private fun executeRootCommand(command: String, onSuccess: () -> Unit) {
         try {
-            val shell = RootTools.getShell(true)
-            shell.add(command) // 添加命令
+            Shell.su(command).exec().out // 执行命令并获取输出
 
-            // 等待命令完成
-            if (shell.isAlive) {
-                onSuccess()
-            } else {
-                showRootCommandDialog()
-            }
+            // 直接调用 onSuccess
+            onSuccess()
         } catch (e: Exception) {
-            showRootCommandDialog()
+            Toast.makeText(this, "执行命令失败: ${e.message}", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -186,24 +177,24 @@ class FragmentHome : AppCompatActivity() {
             .setMessage("当前无法使用默认的'su'命令，请输入正确的Root授权命令：")
             .setView(input)
             .setPositiveButton("确定") { _, _ ->
-                rootCommand = input.text.toString()
-
-                // 再次尝试获取分区
-                partitions = getPartitionsFromDev()
-
-                // 检查是否成功获取到分区列表
-                if (partitions.isNotEmpty()) {
-                    setupUI()
-                } else {
-                    Toast.makeText(this, "获取分区失败，请检查Root授权命令", Toast.LENGTH_SHORT).show()
-                    
-     showRootCommandDialog()
-                }
+                // 这里可以使用输入的命令进行其他操作
+                // 目前直接返回
+                showPartitions() // 重新获取分区
             }
             .setNegativeButton("取消", null)
             .setNeutralButton("退出软件") { _, _ ->
                 finish() // 退出应用程序
             }
             .show()
+    }
+
+    // 重新获取分区
+    private fun showPartitions() {
+        partitions = getPartitionsFromDev()
+        if (partitions.isNotEmpty()) {
+            setupUI()
+        } else {
+            Toast.makeText(this, "获取分区失败，请检查Root授权命令", Toast.LENGTH_SHORT).show()
+        }
     }
 }
