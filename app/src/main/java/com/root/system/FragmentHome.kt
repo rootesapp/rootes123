@@ -6,7 +6,10 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
+import android.view.KeyEvent
+import android.view.inputmethod.EditorInfo
 import android.widget.EditText
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -54,10 +57,20 @@ class FragmentHome : AppCompatActivity() {
             showPartitionDialog(partition)
         }
 
-        // 搜索框监听
+        // 添加搜索框回车键监听
+        searchBox.setOnEditorActionListener(TextView.OnEditorActionListener { v, actionId, event ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH || event?.keyCode == KeyEvent.KEYCODE_ENTER) {
+                val query = searchBox.text.toString()
+                filterPartitions(query)
+                return@OnEditorActionListener true
+            }
+            false
+        })
+
+        // 搜索框文字变更监听
         searchBox.addTextChangedListener(object : TextWatcher {
             override fun afterTextChanged(s: Editable?) {
-                filterPartitions(s.toString())
+                // 可以实时过滤或在按回车时过滤
             }
 
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
