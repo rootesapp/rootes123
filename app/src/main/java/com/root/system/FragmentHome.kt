@@ -1,48 +1,41 @@
 package com.root.system
 
-import com.root.system.PartitionAdapter
-
 import android.app.AlertDialog
 import android.content.DialogInterface
 import android.os.Bundle
 import android.text.Editable
 import android.text.InputType
 import android.text.TextWatcher
-import android.view.LayoutInflater
-import android.view.View
-import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.Toast
-import androidx.fragment.app.Fragment
+import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
-class FragmentHome : Fragment() {
+class FragmentHome : AppCompatActivity() {
 
     private lateinit var partitionList: RecyclerView
     private lateinit var searchBox: EditText
     private lateinit var partitions: MutableList<String>
     private var rootCommand = "su" // 默认的 root 命令
 
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        val view = inflater.inflate(R.layout.fragment_home, container, false)
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.fragment_home) // 保持使用 fragment_home.xml
 
         // 初始化RecyclerView和搜索框
-        partitionList = view.findViewById(R.id.partition_list)
-        searchBox = view.findViewById(R.id.search_box)
-        val flashAllBtn: FloatingActionButton = view.findViewById(R.id.flash_all_button)
+        partitionList = findViewById(R.id.partition_list)
+        searchBox = findViewById(R.id.search_box)
+        val flashAllBtn: FloatingActionButton = findViewById(R.id.flash_all_button)
 
         // 获取分区列表，使用root权限从 /dev/block/by-name 目录获取分区信息
         partitions = getPartitionsFromDev()
 
         // 设置RecyclerView
-        partitionList.layoutManager = LinearLayoutManager(requireContext())
+        partitionList.layoutManager = LinearLayoutManager(this)
         partitionList.adapter = PartitionAdapter(partitions) { partition ->
             showPartitionDialog(partition)
         }
@@ -61,8 +54,6 @@ class FragmentHome : Fragment() {
         flashAllBtn.setOnClickListener {
             flashAllPartitions()
         }
-
-        return view
     }
 
     // 使用 root 权限从 /dev/block/by-name 获取分区
@@ -102,7 +93,7 @@ class FragmentHome : Fragment() {
     // 显示分区对话框
     private fun showPartitionDialog(partition: String) {
         val options = arrayOf("提取", "刷入")
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(this)
             .setTitle("选择操作 - $partition")
             .setItems(options) { _, which ->
                 when (which) {
@@ -119,7 +110,7 @@ class FragmentHome : Fragment() {
         val command = "$rootCommand -c 'dd if=/dev/block/by-name/$partition of=$outputPath'"
 
         executeRootCommand(command) {
-            Toast.makeText(requireContext(), "提取完成: $outputPath", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "提取完成: $outputPath", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -129,13 +120,13 @@ class FragmentHome : Fragment() {
         val command = "$rootCommand -c 'dd if=$inputPath of=/dev/block/by-name/$partition'"
 
         executeRootCommand(command) {
-            Toast.makeText(requireContext(), "$partition 刷入完成", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "$partition 刷入完成", Toast.LENGTH_SHORT).show()
         }
     }
 
     // 批量刷入所有分区
     private fun flashAllPartitions() {
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(this)
             .setTitle("确认批量刷入")
             .setMessage("你确定要刷入所有分区吗？这可能会导致数据丢失。")
             .setPositiveButton("确定") { _, _ ->
@@ -163,22 +154,22 @@ class FragmentHome : Fragment() {
 
     // 弹出对话框让用户输入root授权命令，并增加退出选项
     private fun showRootCommandDialog() {
-        val input = EditText(requireContext()).apply {
+        val input = EditText(this).apply {
             hint = "请输入Root授权命令"
             inputType = InputType.TYPE_CLASS_TEXT
         }
 
-        AlertDialog.Builder(requireContext())
+        AlertDialog.Builder(this)
             .setTitle("Root授权命令无效")
             .setMessage("当前无法使用默认的'su'命令，请输入正确的Root授权命令：")
             .setView(input)
             .setPositiveButton("确定") { _, _ ->
                 rootCommand = input.text.toString()
-                Toast.makeText(requireContext(), "Root授权命令已更新", Toast.LENGTH_SHORT).show()
+                Toast.makeText(this, "Root授权命令已更新", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("取消", null)
             .setNeutralButton("退出软件") { _, _ ->
-                activity?.finish() // 退出应用程序
+                finish() // 退出应用程序
             }
             .show()
     }
