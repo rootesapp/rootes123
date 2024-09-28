@@ -15,6 +15,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.stericson.RootTools.RootTools
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
@@ -81,22 +82,19 @@ class FragmentHome : AppCompatActivity() {
     // 使用 root 权限从 /dev/block/by-name 获取分区
     private fun getPartitionsFromDev(): MutableList<String> {
         val partitions = mutableListOf<String>()
-        val command = "$rootCommand -c 'ls /dev/block/by-name'"
+        val command = "ls /dev/block/by-name"
 
         try {
-            val process = Runtime.getRuntime().exec(command)
-            val reader = BufferedReader(InputStreamReader(process.inputStream))
-            var line: String?
+            val shell = RootTools.getShell(true)
+            val output = shell.run(command)
 
-            while (reader.readLine().also { line = it } != null) {
-                partitions.add(line!!)
+            output.forEach { line ->
+                partitions.add(line)
             }
 
-            process.waitFor()
-
-            // 如果退出状态码不为 0，说明 root 获取失败
-            if (process.exitValue() != 0) {
-                partitions.clear() // 清空 partitions，表示获取失败
+            // 检查返回状态
+            if (partitions.isEmpty()) {
+                throw RuntimeException("获取分区失败")
             }
         } catch (e: Exception) {
             partitions.clear() // 捕获异常，清空 partitions
@@ -162,10 +160,11 @@ class FragmentHome : AppCompatActivity() {
     // 执行root命令的方法
     private fun executeRootCommand(command: String, onSuccess: () -> Unit) {
         try {
-            val process = Runtime.getRuntime().exec(command)
-            process.waitFor()
+            val shell = RootTools.getShell(true)
+            shell.add(command) // 添加命令
 
-            if (process.exitValue() == 0) {
+            // 等待命令完成
+            if (shell.isAlive) {
                 onSuccess()
             } else {
                 showRootCommandDialog()
@@ -197,6 +196,8 @@ class FragmentHome : AppCompatActivity() {
                     setupUI()
                 } else {
                     Toast.makeText(this, "获取分区失败，请检查Root授权命令", Toast.LENGTH_SHORT).show()
+                    
+     showRootCommandDialog()
                 }
             }
             .setNegativeButton("取消", null)
