@@ -62,17 +62,6 @@ android {
     }
 }
 
-task downloadRootTools(type: Download) {
-    src 'https://github.com/Stericson/RootTools/releases/download/5.0/RootTools.aar'
-    dest new File(buildDir, 'libs/RootTools.aar')
-}
-
-tasks.whenTaskAdded { task ->
-    if (task.name == "assembleDebug" || task.name == "assembleRelease") {
-        task.dependsOn(downloadRootTools)
-    }
-}
-
 dependencies {
     implementation fileTree(dir: 'libs', include: ['*.jar', '*.aar'])
     implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.3.9"
