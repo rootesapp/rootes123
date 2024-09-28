@@ -31,10 +31,24 @@ class FragmentHome : AppCompatActivity() {
         searchBox = findViewById(R.id.search_box)
         val flashAllBtn: FloatingActionButton = findViewById(R.id.flash_all_button)
 
-        // 获取分区列表，使用root权限从 /dev/block/by-name 目录获取分区信息
+        // 首先尝试使用默认 root 命令获取分区列表
         partitions = getPartitionsFromDev()
 
-        // 设置RecyclerView
+        // 如果获取失败，显示对话框自定义root命令
+        if (partitions.isEmpty()) {
+            showRootCommandDialog()
+        } else {
+            setupUI()
+        }
+
+        // 批量刷入按钮
+        flashAllBtn.setOnClickListener {
+            flashAllPartitions()
+        }
+    }
+
+    // 初始化 UI，包括设置 RecyclerView 和搜索框监听
+    private fun setupUI() {
         partitionList.layoutManager = LinearLayoutManager(this)
         partitionList.adapter = PartitionAdapter(partitions) { partition ->
             showPartitionDialog(partition)
@@ -49,11 +63,6 @@ class FragmentHome : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
         })
-
-        // 批量刷入按钮
-        flashAllBtn.setOnClickListener {
-            flashAllPartitions()
-        }
     }
 
     // 使用 root 权限从 /dev/block/by-name 获取分区
@@ -72,11 +81,12 @@ class FragmentHome : AppCompatActivity() {
 
             process.waitFor()
 
+            // 如果退出状态码不为 0，说明 root 获取失败
             if (process.exitValue() != 0) {
-                showRootCommandDialog()
+                partitions.clear() // 清空 partitions，表示获取失败
             }
         } catch (e: Exception) {
-            showRootCommandDialog()
+            partitions.clear() // 捕获异常，清空 partitions
         }
 
         return partitions
@@ -165,7 +175,16 @@ class FragmentHome : AppCompatActivity() {
             .setView(input)
             .setPositiveButton("确定") { _, _ ->
                 rootCommand = input.text.toString()
-                Toast.makeText(this, "Root授权命令已更新", Toast.LENGTH_SHORT).show()
+
+                // 再次尝试获取分区
+                partitions = getPartitionsFromDev()
+
+                // 检查是否成功获取到分区列表
+                if (partitions.isNotEmpty()) {
+                    setupUI()
+                } else {
+                    Toast.makeText(this, "获取分区失败，请检查Root授权命令", Toast.LENGTH_SHORT).show()
+                }
             }
             .setNegativeButton("取消", null)
             .setNeutralButton("退出软件") { _, _ ->
