@@ -1,5 +1,7 @@
 package com.root.system
 
+import com.root.system.PartitionAdapter
+
 import android.app.AlertDialog
 import android.content.DialogInterface
 import android.os.Bundle
