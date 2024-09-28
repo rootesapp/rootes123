@@ -1,8 +1,11 @@
 package com.root.system
 
 import android.app.AlertDialog
+import android.content.DialogInterface
 import android.os.Bundle
+import android.text.Editable
 import android.text.InputType
+import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -43,9 +46,14 @@ class FragmentHome : Fragment() {
         }
 
         // 搜索框监听
-        searchBox.addTextChangedListener { text ->
-            filterPartitions(text.toString())
-        }
+        searchBox.addTextChangedListener(object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                filterPartitions(s.toString())
+            }
+
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        })
 
         // 批量刷入按钮
         flashAllBtn.setOnClickListener {
@@ -151,7 +159,7 @@ class FragmentHome : Fragment() {
         }
     }
 
-    // 弹出对话框让用户输入root授权命令
+    // 弹出对话框让用户输入root授权命令，并增加退出选项
     private fun showRootCommandDialog() {
         val input = EditText(requireContext()).apply {
             hint = "请输入Root授权命令"
@@ -167,6 +175,9 @@ class FragmentHome : Fragment() {
                 Toast.makeText(requireContext(), "Root授权命令已更新", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("取消", null)
+            .setNeutralButton("退出软件") { _, _ ->
+                activity?.finish() // 退出应用程序
+            }
             .show()
     }
 }
