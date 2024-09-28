@@ -51,8 +51,6 @@ class MainActivity : AppCompatActivity() {
     private var isDialogShown = false
     override fun onCreate(savedInstanceState: Bundle?) {
       
-   Toast.makeText(this, "正在使用玩机百宝箱开源版", Toast.LENGTH_LONG).show()
-        
         super.onCreate(savedInstanceState)
         ThemeModeState.switchTheme(this)
         setContentView(R.layout.activity_main)
