@@ -1,213 +1,172 @@
 package com.root.system
 
-import android.annotation.SuppressLint
-import android.app.ActivityManager
-import android.content.Context.ACTIVITY_SERVICE
-import android.content.SharedPreferences
+import android.app.AlertDialog
 import android.os.Bundle
-import android.os.Handler
-import com.google.android.material.snackbar.Snackbar
-import androidx.fragment.app.Fragment
-import android.util.Log
+import android.text.InputType
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
 import android.widget.Toast
-import com.omarea.common.shell.KeepShellPublic
-import com.root.system.ui.AdapterCpuCores
-import com.root.system.utils.CpuFrequencyUtils
-import com.root.system.utils.GpuUtils
-import kotlinx.android.synthetic.main.fragment_home.*
-import java.math.BigDecimal
-import java.math.RoundingMode
-import java.util.*
-import kotlin.collections.HashMap
+import androidx.fragment.app.Fragment
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.floatingactionbutton.FloatingActionButton
+import java.io.BufferedReader
+import java.io.InputStreamReader
 
+class FragmentHome : Fragment() {
 
-class FragmentHome : androidx.fragment.app.Fragment() {
-    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?,
-                              savedInstanceState: Bundle?): View? {
-        return inflater.inflate(R.layout.fragment_home, container, false)
-    }
+    private lateinit var partitionList: RecyclerView
+    private lateinit var searchBox: EditText
+    private lateinit var partitions: MutableList<String>
+    private var rootCommand = "su" // 默认的 root 命令
 
-    private lateinit var globalSPF: SharedPreferences
-    private var timer: Timer? = null
-    private fun showMsg(msg: String) {
-        this.view?.let { Snackbar.make(it, msg, Snackbar.LENGTH_LONG).show() }
-    }
+    override fun onCreateView(
+        inflater: LayoutInflater, container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View? {
+        val view = inflater.inflate(R.layout.fragment_home, container, false)
 
-    private lateinit var spf: SharedPreferences
-    private var myHandler = Handler()
+        // 初始化RecyclerView和搜索框
+        partitionList = view.findViewById(R.id.partition_list)
+        searchBox = view.findViewById(R.id.search_box)
+        val flashAllBtn: FloatingActionButton = view.findViewById(R.id.flash_all_button)
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
+        // 获取分区列表，使用root权限从 /dev/block/by-name 目录获取分区信息
+        partitions = getPartitionsFromDev()
 
-        home_clear_ram.setOnClickListener {
-            home_raminfo_text.text = getString(R.string.please_wait)
-            Thread(Runnable {
-                KeepShellPublic.doCmdSync("sync\n" + "echo 3 > /proc/sys/vm/drop_caches\n" + "echo 1 > /proc/sys/vm/compact_memory")
-                myHandler.postDelayed({
-                    try {
-                        updateRamInfo()
-                        Toast.makeText(context, getString(R.string.monitor_cache_cleared), Toast.LENGTH_SHORT).show()
-                    } catch (ex: java.lang.Exception) {
-                    }
-                }, 600)
-            }).start()
+        // 设置RecyclerView
+        partitionList.layoutManager = LinearLayoutManager(requireContext())
+        partitionList.adapter = PartitionAdapter(partitions) { partition ->
+            showPartitionDialog(partition)
         }
-        home_clear_swap.setOnClickListener {
-            home_zramsize_text.text = getString(R.string.please_wait)
-            Thread(Runnable {
-                KeepShellPublic.doCmdSync("sync\n" + "echo 1 > /proc/sys/vm/compact_memory")
-                myHandler.postDelayed({
-                    try {
-                        updateRamInfo()
-                        Toast.makeText(context, getString(R.string.monitor_ram_cleared), Toast.LENGTH_SHORT).show()
-                    } catch (ex: java.lang.Exception) {
-                    }
-                }, 600)
-            }).start()
+
+        // 搜索框监听
+        searchBox.addTextChangedListener { text ->
+            filterPartitions(text.toString())
         }
-    }
 
-    @SuppressLint("SetTextI18n")
-    override fun onResume() {
-        super.onResume()
-        if (isDetached) {
-            return
+        // 批量刷入按钮
+        flashAllBtn.setOnClickListener {
+            flashAllPartitions()
         }
-        maxFreqs.clear()
-        minFreqs.clear()
-        stopTimer()
-        timer = Timer()
-        timer!!.schedule(object : TimerTask() {
-            override fun run() {
-                updateInfo()
-            }
-        }, 0, 1000)
-        updateRamInfo()
+
+        return view
     }
 
-    private var coreCount = -1
-    private var activityManager: ActivityManager? = null
+    // 使用 root 权限从 /dev/block/by-name 获取分区
+    private fun getPartitionsFromDev(): MutableList<String> {
+        val partitions = mutableListOf<String>()
+        val command = "$rootCommand -c 'ls /dev/block/by-name'"
 
-    private var minFreqs = HashMap<Int, String>()
-    private var maxFreqs = HashMap<Int, String>()
-    fun format1(value: Double): String {
-
-        var bd = BigDecimal(value)
-        bd = bd.setScale(1, RoundingMode.HALF_UP)
-        return bd.toString()
-    }
-
-    @SuppressLint("SetTextI18n")
-    private fun updateRamInfo() {
         try {
-            val info = ActivityManager.MemoryInfo()
-            if (activityManager == null) {
-                activityManager = context!!.getSystemService(ACTIVITY_SERVICE) as ActivityManager
+            val process = Runtime.getRuntime().exec(command)
+            val reader = BufferedReader(InputStreamReader(process.inputStream))
+            var line: String?
+
+            while (reader.readLine().also { line = it } != null) {
+                partitions.add(line!!)
             }
-            activityManager!!.getMemoryInfo(info)
-            val totalMem = (info.totalMem / 1024 / 1024f).toInt()
-            val availMem = (info.availMem / 1024 / 1024f).toInt()
-            home_raminfo_text.text = "${((totalMem - availMem) * 100 / totalMem)}% (${totalMem / 1024 + 1}GB)"
-            home_raminfo.setData(totalMem.toFloat(), availMem.toFloat())
-            val swapInfo = KeepShellPublic.doCmdSync("free -m | grep Swap")
-            if (swapInfo.contains("Swap")) {
-                try {
-                    val swapInfos = swapInfo.substring(swapInfo.indexOf(" "), swapInfo.lastIndexOf(" ")).trim()
-                    if (Regex("[\\d]{1,}[\\s]{1,}[\\d]{1,}").matches(swapInfos)) {
-                        val total = swapInfos.substring(0, swapInfos.indexOf(" ")).trim().toInt()
-                        val use = swapInfos.substring(swapInfos.indexOf(" ")).trim().toInt()
-                        val free = total - use
-                        home_swapstate_chat.setData(total.toFloat(), free.toFloat())
-                        if (total > 99) {
-                            home_zramsize_text.text = "${(use * 100.0 / total).toInt()}% (${format1(total / 1024.0)}GB)"
-                        } else {
-                            home_zramsize_text.text = "${(use * 100.0 / total).toInt()}% (${total}MB)"
-                        }
-                    }
-                } catch (ex: java.lang.Exception) {
+
+            process.waitFor()
+
+            if (process.exitValue() != 0) {
+                showRootCommandDialog()
+            }
+        } catch (e: Exception) {
+            showRootCommandDialog()
+        }
+
+        return partitions
+    }
+
+    // 过滤分区列表
+    private fun filterPartitions(query: String) {
+        val filteredList = partitions.filter { it.contains(query, ignoreCase = true) }
+        partitionList.adapter = PartitionAdapter(filteredList) { partition ->
+            showPartitionDialog(partition)
+        }
+    }
+
+    // 显示分区对话框
+    private fun showPartitionDialog(partition: String) {
+        val options = arrayOf("提取", "刷入")
+        AlertDialog.Builder(requireContext())
+            .setTitle("选择操作 - $partition")
+            .setItems(options) { _, which ->
+                when (which) {
+                    0 -> extractPartition(partition)
+                    1 -> flashPartition(partition)
                 }
-                // home_swapstate.text = swapInfo.substring(swapInfo.indexOf(" "), swapInfo.lastIndexOf(" ")).trim()
+            }
+            .show()
+    }
+
+    // 提取分区的功能 (使用dd命令)
+    private fun extractPartition(partition: String) {
+        val outputPath = "/sdcard/${partition}_backup.img"
+        val command = "$rootCommand -c 'dd if=/dev/block/by-name/$partition of=$outputPath'"
+
+        executeRootCommand(command) {
+            Toast.makeText(requireContext(), "提取完成: $outputPath", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 刷入分区的功能 (使用dd命令)
+    private fun flashPartition(partition: String) {
+        val inputPath = "/sdcard/${partition}_image.img"
+        val command = "$rootCommand -c 'dd if=$inputPath of=/dev/block/by-name/$partition'"
+
+        executeRootCommand(command) {
+            Toast.makeText(requireContext(), "$partition 刷入完成", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // 批量刷入所有分区
+    private fun flashAllPartitions() {
+        AlertDialog.Builder(requireContext())
+            .setTitle("确认批量刷入")
+            .setMessage("你确定要刷入所有分区吗？这可能会导致数据丢失。")
+            .setPositiveButton("确定") { _, _ ->
+                partitions.forEach { flashPartition(it) }
+            }
+            .setNegativeButton("取消", null)
+            .show()
+    }
+
+    // 执行root命令的方法
+    private fun executeRootCommand(command: String, onSuccess: () -> Unit) {
+        try {
+            val process = Runtime.getRuntime().exec(command)
+            process.waitFor()
+
+            if (process.exitValue() == 0) {
+                onSuccess()
             } else {
+                showRootCommandDialog()
             }
-        } catch (ex: Exception) {
+        } catch (e: Exception) {
+            showRootCommandDialog()
         }
     }
 
-    private var updateTick = 0
-
-    @SuppressLint("SetTextI18n")
-    private fun updateInfo() {
-        if (coreCount < 1) {
-            coreCount = CpuFrequencyUtils.getCoreCount()
+    // 弹出对话框让用户输入root授权命令
+    private fun showRootCommandDialog() {
+        val input = EditText(requireContext()).apply {
+            hint = "请输入Root授权命令"
+            inputType = InputType.TYPE_CLASS_TEXT
         }
-        val cores = ArrayList<CpuCoreInfo>()
-        val loads = CpuFrequencyUtils.getCpuLoad()
-        for (coreIndex in 0 until coreCount) {
-            val core = CpuCoreInfo()
 
-            core.currentFreq = CpuFrequencyUtils.getCurrentFrequency("cpu$coreIndex")
-            if (!maxFreqs.containsKey(coreIndex) || (core.currentFreq != "" && maxFreqs.get(coreIndex).isNullOrEmpty())) {
-                maxFreqs.put(coreIndex, CpuFrequencyUtils.getCurrentMaxFrequency("cpu" + coreIndex))
+        AlertDialog.Builder(requireContext())
+            .setTitle("Root授权命令无效")
+            .setMessage("当前无法使用默认的'su'命令，请输入正确的Root授权命令：")
+            .setView(input)
+            .setPositiveButton("确定") { _, _ ->
+                rootCommand = input.text.toString()
+                Toast.makeText(requireContext(), "Root授权命令已更新", Toast.LENGTH_SHORT).show()
             }
-            core.maxFreq = maxFreqs.get(coreIndex)
-
-            if (!minFreqs.containsKey(coreIndex) || (core.currentFreq != "" && minFreqs.get(coreIndex).isNullOrEmpty())) {
-                minFreqs.put(coreIndex, CpuFrequencyUtils.getCurrentMinFrequency("cpu" + coreIndex))
-            }
-            core.minFreq = minFreqs.get(coreIndex)
-
-            if (loads.containsKey(coreIndex)) {
-                core.loadRatio = loads.get(coreIndex)!!
-            }
-            cores.add(core)
-        }
-        val gpuFreq = GpuUtils.getGpuFreq() + "Mhz"
-        val gpuLoad = GpuUtils.getGpuLoad()
-        myHandler.post {
-            try {
-                cpu_core_count.text = String.format(getString(R.string.monitor_core_count), coreCount)
-
-                home_gpu_freq.text = gpuFreq
-                home_gpu_load.text = String.format(getString(R.string.monitor_laod), gpuLoad)
-                if (gpuLoad > -1) {
-                    home_gpu_chat.setData(100.toFloat(), (100 - gpuLoad).toFloat())
-                }
-                if (loads.containsKey(-1)) {
-                    cpu_core_total_load.text = String.format(getString(R.string.monitor_laod), loads.get(-1)!!.toInt())
-                    home_cpu_chat.setData(100.toFloat(), (100 - loads.get(-1)!!.toInt()).toFloat())
-                }
-                if (cpu_core_list.adapter == null) {
-                    if (cores.size < 6) {
-                        cpu_core_list.numColumns = 2
-                    }
-                    cpu_core_list.adapter = AdapterCpuCores(context!!, cores)
-                } else {
-                    (cpu_core_list.adapter as AdapterCpuCores).setData(cores)
-                }
-            } catch (ex: Exception) {
-                Log.e("Exception", ex.message)
-            }
-        }
-        updateTick++
-        if (updateTick > 5) {
-            updateTick = 0
-            minFreqs.clear()
-            maxFreqs.clear()
-        }
-    }
-
-    private fun stopTimer() {
-        if (this.timer != null) {
-            timer!!.cancel()
-            timer = null
-        }
-    }
-
-    override fun onPause() {
-        stopTimer()
-        super.onPause()
+            .setNegativeButton("取消", null)
+            .show()
     }
 }
