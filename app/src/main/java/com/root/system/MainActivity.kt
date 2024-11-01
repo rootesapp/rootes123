@@ -320,55 +320,11 @@ class MainActivity : AppCompatActivity() {
 
                 DialogHelper.customDialog(this, layout)
             }
-
-
-            R.id.option_menu_update -> {
-                Toast.makeText(this, "正在检查更新，如果没有弹窗就是最新版", Toast.LENGTH_LONG).show()
-            }
-
-            R.id.option_menu_update_beta -> {
-                Toast.makeText(this, "正在检查更新，如果没有弹窗就是最新版", Toast.LENGTH_LONG).show()
-            }
             
             
-            R.id.option_menu_info -> {
-                val intent = Intent()
-                intent.setClass(this,AboutActivity::class.java)
-                startActivity(intent)
-            }
             
             R.id.option_menu_reboot -> {
                 DialogPower(this).showPowerMenu()
-            }
-            R.id.action_graph -> {
-                if (FloatMonitor.isShown == true) {
-                    FloatMonitor(this).hidePopupWindow()
-                    return false
-                }
-                if (Build.VERSION.SDK_INT >= 23) {
-                    if (Settings.canDrawOverlays(this)) {
-                        FloatMonitor(this).showPopupWindow()
-                        Toast.makeText(this, getString(R.string.float_monitor_tips), Toast.LENGTH_LONG).show()
-                    } else {
-                        //若没有权限，提示获取
-                        //val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION);
-                        //startActivity(intent);
-                        val intent = Intent()
-                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        intent.action = "android.settings.APPLICATION_DETAILS_SETTINGS"
-                        intent.data = Uri.fromParts("package", this.packageName, null)
-
-                        Toast.makeText(applicationContext, getString(R.string.permission_float), Toast.LENGTH_LONG).show()
-
-                        try {
-                            startActivity(intent)
-                        } catch (ex: Exception) {
-                        }
-                    }
-                } else {
-                    FloatMonitor(this).showPopupWindow()
-                    Toast.makeText(this, getString(R.string.float_monitor_tips), Toast.LENGTH_LONG).show()
-                }
             }
         }
         return super.onOptionsItemSelected(item)
