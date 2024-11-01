@@ -68,7 +68,8 @@ class MainActivity : AppCompatActivity() {
         main_tabhost.setup()
         val tabIconHelper = TabIconHelper(main_tabhost, this)
         if (CheckRootStatus.lastCheckResult && krScriptConfig.allowHomePage) {
-            tabIconHelper.newTabSpec(getString(R.string.tab_home), getDrawable(R.drawable.tab_home)!!, R.id.main_tabhost_cpu)
+            
+            main_tabhost_cpu.visibility = View.GONE
         } else {
             main_tabhost_cpu.visibility = View.GONE
         }
